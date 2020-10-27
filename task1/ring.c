@@ -9,6 +9,7 @@
 #define BUFFERSIZE 1024
 
 struct body {
+    int buffersize;
     char *buffer;
     int buffercount;
     int start, end;
@@ -92,11 +93,23 @@ int ring_write(struct inode *inode, struct file *file, const char *pB, int count
     return count;
 }
 
+int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long arg) {
+    printk("jestem");
+    printk("%lu", arg);
+    printk("\n");
+    printk("%u", cmd);
+    printk("\n");
+    printk("Caly %d \n", sth[arg].buffersize));
+    printk("Zapelniony %d", sth[arg].buffercount);
+    return 0;
+}
+
 struct file_operations ring_ops = {
         read : ring_read,
         write : ring_write,
         open : ring_open,
-        release : ring_release
+        release : ring_release,
+        ioctl: ring_ioctl
 };
 
 #define RING_MAJOR 60
@@ -107,6 +120,7 @@ int ring_init(void) {
         init_waitqueue(&sth[i].write_queue);
         init_waitqueue(&sth[i].read_queue);
         sth[i].usecount = 0;
+        sth[i].buffersize = 1024;
     }
     // init_waitqueue(&write_queue);
     // init_waitqueue(&read_queue);
