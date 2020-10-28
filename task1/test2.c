@@ -4,11 +4,11 @@
 #include <stdlib.h>
 
 
-#define WRITE_IOCTL _IOW(60,1,int)
+#define READ_IOCTL _IOR(60,3,int)
 
 int main() {
     int fd = open("/dev/ring");
-    ioctl(fd, WRITE_IOCTL,1 );
+    ioctl(fd, READ_IOCTL,1 );
     close(fd);
     return 0;
 }

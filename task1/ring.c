@@ -5,8 +5,10 @@
 #include <linux/malloc.h>
 #include <asm/semaphore.h>
 #include <linux/module.h>
+#include <linux/ioctl.h>
 
-#define BUFFERSIZE 1024
+#define CHANGE_BUFF _IOW(60,1,int)
+#define READ_BUFF _IOR(60,3,int)
 
 struct body {
     int buffersize;
@@ -26,7 +28,7 @@ int ring_open(struct inode *inode, struct file *file) {
     sth[number].usecount++;
     if (sth[number].usecount == 1) {
         // kmalloc moze uspic proces - uwaga na synchronizacje
-        sth[number].buffer = kmalloc(BUFFERSIZE, GFP_KERNEL);
+        sth[number].buffer = kmalloc(sth[number].buffersize, GFP_KERNEL);
         sth[number].buffercount = sth[number].start = sth[number].end = 0;
     }
     up(&sem);
@@ -60,7 +62,7 @@ int ring_read(struct inode *inode, struct file *file, char *pB, int count) {
 
         tmp = sth[number].buffer[sth[number].start];
         sth[number].start++;
-        if (sth[number].start == BUFFERSIZE)
+        if (sth[number].start == sth[number].buffersize)
             sth[number].start = 0;
         sth[number].buffercount--;
         wake_up(&sth[number].write_queue);
@@ -75,7 +77,7 @@ int ring_write(struct inode *inode, struct file *file, const char *pB, int count
     char tmp;
     for (i = 0; i < count; i++) {
         tmp = get_user(pB + i);
-        while (sth[number].buffercount == BUFFERSIZE) {
+        while (sth[number].buffercount == sth[number].buffersize) {
             interruptible_sleep_on(&sth[number].write_queue);
             if (current->signal & ~current->blocked) {
                 if (i == 0)
@@ -86,7 +88,7 @@ int ring_write(struct inode *inode, struct file *file, const char *pB, int count
         sth[number].buffer[sth[number].end] = tmp;
         sth[number].buffercount++;
         sth[number].end++;
-        if (sth[number].end == BUFFERSIZE)
+        if (sth[number].end == sth[number].buffersize)
             sth[number].end = 0;
         wake_up(&sth[number].read_queue);
     }
@@ -94,14 +96,46 @@ int ring_write(struct inode *inode, struct file *file, const char *pB, int count
 }
 
 int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long arg) {
-    printk("jestem");
-    printk("%lu", arg);
-    printk("\n");
-    printk("%u", cmd);
-    printk("\n");
-    printk("Caly %d \n", sth[arg].buffersize));
-    printk("Zapelniony %d", sth[arg].buffercount);
-    return 0;
+    int number = MINOR(inode->i_rdev);
+    if (cmd == CHANGE_BUFF){
+        char *temp;
+        printk("jestem");
+        printk("%lu", arg);
+        printk("\n");
+        printk("%u", cmd);
+        printk("\n");
+        printk("Caly %d \n", sth[number].buffersize));
+        printk("Zapelniony %d \n", sth[number].buffercount);
+
+        down(&sem);
+        temp = kmalloc(arg, GFP_KERNEL);
+
+        if (arg < sth[number].buffersize) {
+            printk("New buffer size is smaller than old buffer size");
+            return 0;
+        }
+        int i;
+        if (sth[number].end == 0 && sth[number].buffercount > 0 ){
+            sth[number].end = sth[number].buffercount;
+        }
+        for (i = sth[number].start, i < sth[number].end; i++) {
+            temp[i] = sth[number].buffer[i];
+        }
+        kfree(sth[number].buffer);
+        sth[number].buffersize = arg;
+        sth[number].buffer = temp;
+        up(&sem);
+
+        wake_up(&sth[number].write_queue);
+        printk("Caly %d \n", sth[arg].buffersize));
+        printk("Zapelniony %d \n", sth[arg].buffercount);
+        return 0;
+    }
+    if (cmd == READ_BUFF){
+        printk("Caly %d \n", sth[arg].buffersize));
+        printk("Zapelniony %d \n", sth[arg].buffercount);
+        return 0;
+    }
 }
 
 struct file_operations ring_ops = {
@@ -116,15 +150,14 @@ struct file_operations ring_ops = {
 
 int ring_init(void) {
     int i;
+
     for (i = 0; i < 4; i++) {
         init_waitqueue(&sth[i].write_queue);
         init_waitqueue(&sth[i].read_queue);
         sth[i].usecount = 0;
         sth[i].buffersize = 1024;
     }
-    // init_waitqueue(&write_queue);
-    // init_waitqueue(&read_queue);
-    // usecount = 0;
+
     register_chrdev(RING_MAJOR, "ring", &ring_ops);
     printk("Ring device initialized\n");
     return 0;
