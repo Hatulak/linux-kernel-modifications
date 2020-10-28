@@ -96,46 +96,62 @@ int ring_write(struct inode *inode, struct file *file, const char *pB, int count
 }
 
 int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long arg) {
-    int number = MINOR(inode->i_rdev);
-    if (cmd == CHANGE_BUFF){
-        char *temp;
-        printk("jestem");
-        printk("%lu", arg);
-        printk("\n");
-        printk("%u", cmd);
-        printk("\n");
-        printk("Caly %d \n", sth[number].buffersize));
-        printk("Zapelniony %d \n", sth[number].buffercount);
+    int number;
+    char *temp;
+    int i;
+    printk("%u \n", cmd);
+    printk("%u \n", CHANGE_BUFF);
+    printk("%u \n", READ_BUFF);
+    switch (cmd) {
+        case CHANGE_BUFF:
+            number = MINOR(inode->i_rdev);
+            printk("Numer podrzedny: %u \n", number);
 
-        down(&sem);
-        temp = kmalloc(arg, GFP_KERNEL);
+            printk("%lu", arg);
+            printk("\n");
+            printk("%u", cmd);
+            printk("\n");
+            printk("caly %d \n", sth[number].buffersize);
+            printk("zapelnione %d \n", sth[number].buffercount);
 
-        if (arg < sth[number].buffersize) {
-            printk("New buffer size is smaller than old buffer size");
-            return 0;
-        }
-        int i;
-        if (sth[number].end == 0 && sth[number].buffercount > 0 ){
-            sth[number].end = sth[number].buffercount;
-        }
-        for (i = sth[number].start, i < sth[number].end; i++) {
-            temp[i] = sth[number].buffer[i];
-        }
-        kfree(sth[number].buffer);
-        sth[number].buffersize = arg;
-        sth[number].buffer = temp;
-        up(&sem);
+            down(&sem);
+            temp = kmalloc(arg, GFP_KERNEL);
 
-        wake_up(&sth[number].write_queue);
-        printk("Caly %d \n", sth[arg].buffersize));
-        printk("Zapelniony %d \n", sth[arg].buffercount);
-        return 0;
+            if (arg < sth[number].buffersize)
+            {
+                printk("Nowy nie moze byc mniejszy od starego");
+                return 0;
+            }
+            if (sth[number].end == 0 && sth[number].buffercount > 0)
+            {
+                sth[number].end = sth[number].start + sth[number].buffercount;
+            }
+
+            printk("poczatek %d \n", sth[number].start);
+            printk("koniec %d \n", sth[number].end);
+
+            for (i = sth[number].start; i < sth[number].end; i++)
+            {
+                temp[i] = sth[number].buffer[i];
+            }
+            kfree(sth[number].buffer);
+            sth[number].buffersize = arg;
+            sth[number].buffer = temp;
+            up(&sem);
+            wake_up(&sth[number].write_queue);
+            printk("caly: %d \n", sth[number].buffersize);
+            printk("zapelnion: %d \n", sth[number].buffercount);
+            break;
+        case READ_BUFF:
+            number = MINOR(inode->i_rdev);
+            printk("caly: %d \n", sth[number].buffersize);
+            printk("zapelnione: %d \n", sth[number].buffercount);
+            break;
+        default:
+            printk("Niepoprawna komenda");
+            break;
     }
-    if (cmd == READ_BUFF){
-        printk("Caly %d \n", sth[arg].buffersize));
-        printk("Zapelniony %d \n", sth[arg].buffercount);
-        return 0;
-    }
+    return 0;
 }
 
 struct file_operations ring_ops = {
