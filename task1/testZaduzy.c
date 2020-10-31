@@ -8,7 +8,7 @@
 
 int main() {
     int fd = open("/dev/ring");
-    ioctl(fd, WRITE_IOCTL,1 );
+    ioctl(fd, WRITE_IOCTL,32768 );
     close(fd);
     return 0;
 }

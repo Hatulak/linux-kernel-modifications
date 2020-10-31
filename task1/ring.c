@@ -23,6 +23,8 @@ struct body sth[4];
 
 int ring_open(struct inode *inode, struct file *file) {
     int number = MINOR(inode->i_rdev);
+    if (number >= 4 || number < 0)
+        return -ENODEV;
     down(&sem);
     MOD_INC_USE_COUNT;
     sth[number].usecount++;
@@ -37,6 +39,8 @@ int ring_open(struct inode *inode, struct file *file) {
 
 void ring_release(struct inode *inode, struct file *file) {
     int number = MINOR(inode->i_rdev);
+    if (number >= 4 || number < 0)
+        return;
     sth[number].usecount--;
     MOD_DEC_USE_COUNT;
     if (sth[number].usecount == 0)
@@ -47,6 +51,8 @@ int ring_read(struct inode *inode, struct file *file, char *pB, int count) {
     int number = MINOR(inode->i_rdev);
     int i;
     char tmp;
+    if (number >= 4 || number < 0)
+        return -ENODEV;
     for (i = 0; i < count; i++) {
         while (sth[number].buffercount == 0) {
             if (sth[number].usecount == 1)
@@ -75,6 +81,8 @@ int ring_write(struct inode *inode, struct file *file, const char *pB, int count
     int number = MINOR(inode->i_rdev);
     int i;
     char tmp;
+    if (number >= 4 || number < 0)
+        return -ENODEV;
     for (i = 0; i < count; i++) {
         tmp = get_user(pB + i);
         while (sth[number].buffercount == sth[number].buffersize) {
@@ -99,53 +107,47 @@ int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigne
     int number;
     char *temp;
     int i;
-    printk("%u \n", cmd);
-    printk("%u \n", CHANGE_BUFF);
-    printk("%u \n", READ_BUFF);
+    number = MINOR(inode->i_rdev);
+    if (number >= 4 || number < 0)
+        return -ENODEV;
     switch (cmd) {
         case CHANGE_BUFF:
-            number = MINOR(inode->i_rdev);
-            printk("Numer podrzedny: %u \n", number);
+            if ((arg != 0) && ((arg & (arg - 1)) == 0)) {
+                printk("Argument nie jest potegą dwojki z przedzialu <256,16384>");
+                return EPERM;
+            }
+            if (arg < 256 || arg > 16384) {
+                printk("Argument wielkosci wykracza poza przedzial <256,16384>");
+                return EPERM;
+            }
 
-            printk("%lu", arg);
-            printk("\n");
-            printk("%u", cmd);
-            printk("\n");
-            printk("caly %d \n", sth[number].buffersize);
-            printk("zapelnione %d \n", sth[number].buffercount);
-
+            if (arg < sth[number].buffersize && sth[number].buffercount > arg) {
+                printk("Nowy buffor mniejszy od starego oraz zapelniony! Nie mozna zmienic rozmiaru buffora");
+                return EPERM;
+            }
             down(&sem);
             temp = kmalloc(arg, GFP_KERNEL);
 
-            if (arg < sth[number].buffersize)
-            {
-                printk("Nowy nie moze byc mniejszy od starego");
-                return 0;
-            }
-            if (sth[number].end == 0 && sth[number].buffercount > 0)
-            {
+            if (sth[number].end == 0 && sth[number].buffercount > 0) {
                 sth[number].end = sth[number].start + sth[number].buffercount;
             }
 
-            printk("poczatek %d \n", sth[number].start);
-            printk("koniec %d \n", sth[number].end);
-
-            for (i = sth[number].start; i < sth[number].end; i++)
-            {
-                temp[i] = sth[number].buffer[i];
+            if (sth[number].buffercount < arg) {
+                for (i = sth[number].start; i < sth[number].end; i++) {
+                    temp[i] = sth[number].buffer[i];
+                }
             }
             kfree(sth[number].buffer);
             sth[number].buffersize = arg;
             sth[number].buffer = temp;
             up(&sem);
             wake_up(&sth[number].write_queue);
-            printk("caly: %d \n", sth[number].buffersize);
-            printk("zapelnion: %d \n", sth[number].buffercount);
             break;
         case READ_BUFF:
             number = MINOR(inode->i_rdev);
             printk("caly: %d \n", sth[number].buffersize);
             printk("zapelnione: %d \n", sth[number].buffercount);
+            arg = sth[number].buffersize;
             break;
         default:
             printk("Niepoprawna komenda");
