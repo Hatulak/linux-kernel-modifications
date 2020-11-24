@@ -1,0 +1,33 @@
+***************
+*** 388,393 ****
+  	NULL		/* fsync */
+  };
+  
+  int chr_dev_init(void)
+  {
+  	if (register_chrdev(MEM_MAJOR,"mem",&memory_fops))
+--- 388,395 ----
+  	NULL		/* fsync */
+  };
+  
++ extern void ring_init(void);
++ 
+  int chr_dev_init(void)
+  {
+  	if (register_chrdev(MEM_MAJOR,"mem",&memory_fops))
+***************
+*** 397,402 ****
+  #ifdef CONFIG_PRINTER
+  	lp_init();
+  #endif
+  #if defined (CONFIG_BUSMOUSE) || defined(CONFIG_UMISC) || \
+      defined (CONFIG_PSMOUSE) || defined (CONFIG_MS_BUSMOUSE) || \
+      defined (CONFIG_ATIXL_BUSMOUSE) || defined(CONFIG_SOFT_WATCHDOG) || \
+--- 399,405 ----
+  #ifdef CONFIG_PRINTER
+  	lp_init();
+  #endif
++ 	ring_init();
+  #if defined (CONFIG_BUSMOUSE) || defined(CONFIG_UMISC) || \
+      defined (CONFIG_PSMOUSE) || defined (CONFIG_MS_BUSMOUSE) || \
+      defined (CONFIG_ATIXL_BUSMOUSE) || defined(CONFIG_SOFT_WATCHDOG) || \
