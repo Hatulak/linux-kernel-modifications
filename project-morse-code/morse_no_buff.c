@@ -6,6 +6,7 @@
 #include <asm/semaphore.h>
 #include <linux/module.h>
 #include <linux/ioctl.h>
+#include <linux/ctype.h>
 #include "console_struct.h"
 
 #define MAX_NUM_OF_DEVICES 8 
@@ -19,7 +20,7 @@
 #define CHANGE_DASH_TIME _IOW(60,3,int)
 #define CHANGE_PAUSE_TIME _IOW(60,4,int)
 
-static const char *alpha[] = {
+static const char *morse_chars[] = {
     ".-",   //A
     "-...", //B
     "-.-.", //C
@@ -47,7 +48,8 @@ static const char *alpha[] = {
     "-.--", //Y
     "--..", //Z
 };
-static const char *num[] = {
+
+static const char *morse_digits[] = {
     "-----", //0
     ".----", //1
     "..---", //2
@@ -60,19 +62,28 @@ static const char *num[] = {
     "----.", //9
 };
 
+static const char* morse_space[] = {"......."}; //(space)
+
 struct vc vc_cons [MAX_NR_CONSOLES];
 
 struct body {
-    int buffersize;
-    char *buffer;
-    int buffercount;
-    int start, end;
     int dot_time, dash_time, pause_time;
     int usecount;
-    struct wait_queue *write_queue;
 };
+
 struct semaphore sem = MUTEX;
 struct body transmitter[8];
+
+
+char* getMorseCode(char c){
+    if(c == ' ')
+        return morse_space[0];
+    if(isalpha(c))
+        return morse_chars[tolower(c) - 'a'];
+    if(isdigit(c))
+        return morse_digits[c - '0' + 26];
+    return "";
+}
 
 
 int morse_open(struct inode *inode, struct file *file) {
@@ -83,11 +94,6 @@ int morse_open(struct inode *inode, struct file *file) {
     down(&sem);
     MOD_INC_USE_COUNT;
     transmitter[number].usecount++;
-    if (transmitter[number].usecount == 1) {
-        // kmalloc moze uspic proces - uwaga na synchronizacje
-        transmitter[number].buffer = kmalloc(transmitter[number].buffersize, GFP_KERNEL);
-        transmitter[number].buffercount = transmitter[number].start = transmitter[number].end = 0;
-    }
     up(&sem);
     return 0;
 }
@@ -98,8 +104,6 @@ void morse_release(struct inode *inode, struct file *file) {
         return;
     transmitter[number].usecount--;
     MOD_DEC_USE_COUNT;
-    if (transmitter[number].usecount == 0)
-        kfree(transmitter[number].buffer);
 }
 
 
@@ -107,26 +111,18 @@ int morse_write(struct inode *inode, struct file *file, const char *pB, int coun
     int number = MINOR(inode->i_rdev);
     int i;
     char tmp;
+    char* print_string;
     if (number >= MAX_NUM_OF_DEVICES || number < 0)
         return -ENODEV;
     for (i = 0; i < count; i++) {
-        tmp = get_user(pB + i);
-        while (transmitter[number].buffercount == transmitter[number].buffersize) {
-            interruptible_sleep_on(&transmitter[number].write_queue);
-            if (current->signal & ~current->blocked) {
+        if (current->signal & ~current->blocked) {
                 if (i == 0)
                     return -ERESTARTSYS;
                 return i;
-            }
         }
-        transmitter[number].buffer[transmitter[number].end] = tmp;
-        transmitter[number].buffercount++;
-        transmitter[number].end++;
-        if (transmitter[number].end == transmitter[number].buffersize)
-            transmitter[number].end = 0;
-        
-        //Zapisane do bufora. Jak odczytywać?
-        wake_up(&transmitter[number].read_queue);
+        tmp = get_user(pB + i);
+        print_string = getMorseCode(tmp)
+        printk(print_string);
     }
     return count;
 }
@@ -141,36 +137,7 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 
     switch (cmd) {
         case CHANGE_BUFF:
-            if ((arg != 0) && ((arg & (arg - 1)) == 0)) {
-                printk("Argument nie jest potegą dwojki z przedzialu <1,1024>");
-                return EPERM;
-            }
-            if (arg < 1 || arg > 1024) {
-                printk("Argument wielkosci wykracza poza przedzial <1,1024>");
-                return EPERM;
-            }
-
-            if (arg < transmitter[number].buffersize && transmitter[number].buffercount > arg) {
-                printk("Nowy buffor mniejszy od starego oraz zapelniony! Nie mozna zmienic rozmiaru buffora");
-                return EPERM;
-            }
-            down(&sem);
-            temp = kmalloc(arg, GFP_KERNEL);
-
-            if (transmitter[number].end == 0 && transmitter[number].buffercount > 0) {
-                transmitter[number].end = transmitter[number].start + transmitter[number].buffercount;
-            }
-
-            if (transmitter[number].buffercount < arg) {
-                for (i = transmitter[number].start; i < transmitter[number].end; i++) {
-                    temp[i] = transmitter[number].buffer[i];
-                }
-            }
-            kfree(transmitter[number].buffer);
-            transmitter[number].buffersize = arg;
-            transmitter[number].buffer = temp;
-            up(&sem);
-            wake_up(&transmitter[number].write_queue);
+            printk("Not implemented yet");
             break;
         case CHANGE_DOT_TIME:
             number = MINOR(inode->i_rdev);
@@ -205,11 +172,8 @@ struct file_operations morse_ops = {
 
 int morse_init(void) {
     int i;
-
     for (i = 0; i < MAX_NUM_OF_DEVICES; i++) {
-        init_waitqueue(&transmitter[i].write_queue);
         transmitter[i].usecount = 0;
-        transmitter[i].buffersize = BUFFER_START_SIZE;
         transmitter[i].dot_time = DOT_START_TIME;
         transmitter[i].dash_time = DASH_START_TIME;
         transmitter[i].pause_time = PAUSE_START_TIME;
