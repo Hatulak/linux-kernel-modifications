@@ -48,6 +48,8 @@
 #include <linux/ctype.h>
 #include <linux/file.h>
 
+extern struct vc vc_cons[MAX_NR_CONSOLES];
+
 extern unsigned char aux_device_present, kbd_read_mask;
 
 #ifdef CONFIG_PCI
@@ -383,6 +385,8 @@ struct symbol_table symbol_table = {
 	/* Modular sound */
 	X(sys_open),
 	X(sys_read),
+	X(vc_cons),
+	X(fg_console),
 	/********************************************************
 	 * Do not add anything below this line,
 	 * as the stacked modules depend on this!

@@ -7,7 +7,9 @@
 #include <linux/module.h>
 #include <linux/ioctl.h>
 #include <linux/ctype.h>
-#include "console_struct.h"
+#include "/usr/src/linux/drivers/char/console_struct.h"
+
+#define currcons fg_console
 
 #define MAX_NUM_OF_DEVICES 8 
 #define BUFFER_START_SIZE 256
@@ -64,7 +66,7 @@ static const char *morse_digits[] = {
 
 static const char* morse_space[] = {"......."}; //(space)
 
-struct vc vc_cons [MAX_NR_CONSOLES];
+//struct vc vc_cons [MAX_NR_CONSOLES];
 
 struct body {
     int dot_time, dash_time, pause_time;
@@ -73,7 +75,6 @@ struct body {
 
 struct semaphore sem = MUTEX;
 struct body transmitter[8];
-
 
 char* getMorseCode(char c){
     if(c == ' ')
@@ -122,7 +123,10 @@ int morse_write(struct inode *inode, struct file *file, const char *pB, int coun
         }
         tmp = get_user(pB + i);
         print_string = getMorseCode(tmp)
+        
         printk(print_string);
+
+        printk("%d", vc_cons[0].d->vc_pos);
     }
     return count;
 }
