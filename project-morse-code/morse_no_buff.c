@@ -7,15 +7,16 @@
 #include <linux/module.h>
 #include <linux/ioctl.h>
 #include <linux/ctype.h>
+#include <linux/delay.h>
 #include "/usr/src/linux/drivers/char/console_struct.h"
 
 #define currcons fg_console
 
 #define MAX_NUM_OF_DEVICES 8 
 #define BUFFER_START_SIZE 256
-#define DOT_START_TIME 50
-#define DASH_START_TIME 100
-#define PAUSE_START_TIME 200
+#define DOT_START_TIME 500
+#define DASH_START_TIME 1000
+#define PAUSE_START_TIME 2000
 
 #define CHANGE_BUFF _IOW(60,1,int)
 #define CHANGE_DOT_TIME _IOW(60,2,int)
@@ -64,7 +65,7 @@ static const char *morse_digits[] = {
     "----.", //9
 };
 
-static const char* morse_space[] = {"......."}; //(space)
+static const char* morse_space[] = {" "}; //(space)
 
 //struct vc vc_cons [MAX_NR_CONSOLES];
 
@@ -110,7 +111,8 @@ void morse_release(struct inode *inode, struct file *file) {
 
 int morse_write(struct inode *inode, struct file *file, const char *pB, int count) {
     int number = MINOR(inode->i_rdev);
-    int i;
+    unsigned short *topleft = origin;
+    int i, j;
     char tmp;
     char* print_string;
     if (number >= MAX_NUM_OF_DEVICES || number < 0)
@@ -122,12 +124,32 @@ int morse_write(struct inode *inode, struct file *file, const char *pB, int coun
                 return i;
         }
         tmp = get_user(pB + i);
-        print_string = getMorseCode(tmp)
+        print_string = getMorseCode(tmp);
         
-        printk(print_string);
-
-        printk("%d", vc_cons[0].d->vc_pos);
+        for(j=0; j< strlen(print_string); j++){
+            if(print_string[j] == '.'){
+                *topleft = (*topleft) | 0xf000;
+                udelay(DOT_START_TIME*1000);
+                *topleft = (*topleft) & 0x0fff;
+                udelay(DOT_START_TIME*1000); 
+            } else if (print_string[j] == '-'){ // -
+                *topleft = (*topleft) | 0xf000;
+                udelay(DASH_START_TIME*1000);
+                *topleft = (*topleft) & 0x0fff;
+                udelay(DOT_START_TIME*1000);
+            } else {
+                udelay(PAUSE_START_TIME*1000);
+            }
+                 
+        }
+    
     }
+
+    // Zmiana background koloru lewego gornego na bialy        
+    //*topleft = (*topleft) | 0xf000;
+    // Zmiana background koloru lewego gornego na czarny
+    //*topleft = (*topleft) & 0x0fff; 
+
     return count;
 }
 
