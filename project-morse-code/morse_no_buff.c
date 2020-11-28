@@ -7,6 +7,7 @@
 #include <linux/module.h>
 #include <linux/ioctl.h>
 #include <linux/ctype.h>
+
 #include <linux/delay.h>
 #include "/usr/src/linux/drivers/char/console_struct.h"
 
@@ -14,9 +15,9 @@
 
 #define MAX_NUM_OF_DEVICES 8 
 #define BUFFER_START_SIZE 256
-#define DOT_START_TIME 500
-#define DASH_START_TIME 1000
-#define PAUSE_START_TIME 2000
+#define DOT_START_TIME 250
+#define DASH_START_TIME 500
+#define PAUSE_START_TIME 1000
 
 #define CHANGE_BUFF _IOW(60,1,int)
 #define CHANGE_DOT_TIME _IOW(60,2,int)
@@ -67,15 +68,17 @@ static const char *morse_digits[] = {
 
 static const char* morse_space[] = {" "}; //(space)
 
-//struct vc vc_cons [MAX_NR_CONSOLES];
+
 
 struct body {
+    int* cons_nr;
     int dot_time, dash_time, pause_time;
     int usecount;
 };
 
 struct semaphore sem = MUTEX;
 struct body transmitter[8];
+
 
 char* getMorseCode(char c){
     if(c == ' ')
@@ -84,7 +87,6 @@ char* getMorseCode(char c){
         return morse_chars[tolower(c) - 'a'];
     if(isdigit(c))
         return morse_digits[c - '0' + 26];
-    return "";
 }
 
 
@@ -96,6 +98,7 @@ int morse_open(struct inode *inode, struct file *file) {
     down(&sem);
     MOD_INC_USE_COUNT;
     transmitter[number].usecount++;
+    *transmitter[number].cons_nr = currcons;
     up(&sem);
     return 0;
 }
@@ -110,11 +113,13 @@ void morse_release(struct inode *inode, struct file *file) {
 
 
 int morse_write(struct inode *inode, struct file *file, const char *pB, int count) {
+    char* print_string;
     int number = MINOR(inode->i_rdev);
-    unsigned short *topleft = origin;
+    unsigned short *topleft = (unsigned short *) vc_cons[*transmitter[number].cons_nr].d->vc_origin;
     int i, j;
     char tmp;
-    char* print_string;
+    
+
     if (number >= MAX_NUM_OF_DEVICES || number < 0)
         return -ENODEV;
     for (i = 0; i < count; i++) {
@@ -124,32 +129,36 @@ int morse_write(struct inode *inode, struct file *file, const char *pB, int coun
                 return i;
         }
         tmp = get_user(pB + i);
-        print_string = getMorseCode(tmp);
-        
-        for(j=0; j< strlen(print_string); j++){
-            if(print_string[j] == '.'){
-                *topleft = (*topleft) | 0xf000;
-                udelay(DOT_START_TIME*1000);
-                *topleft = (*topleft) & 0x0fff;
-                udelay(DOT_START_TIME*1000); 
-            } else if (print_string[j] == '-'){ // -
-                *topleft = (*topleft) | 0xf000;
-                udelay(DASH_START_TIME*1000);
-                *topleft = (*topleft) & 0x0fff;
-                udelay(DOT_START_TIME*1000);
-            } else {
-                udelay(PAUSE_START_TIME*1000);
-            }
-                 
-        }
-    
+	print_string = getMorseCode(tmp);
+       
+        for(j = 0; j < strlen(print_string); j++){
+	//    if(*transmitter[number].cons_nr == currcons){
+         	if(print_string[j] == '.'){
+	            //printk(".");
+
+		    *topleft = (*topleft) | 0xf000;
+		    udelay(transmitter[number].dot_time *1000);
+	            *topleft = (*topleft) & 0x0fff;
+		    udelay(transmitter[number].dot_time *1000);
+    	        } else if (print_string[j] == '-'){
+		    //printk("-");
+
+		    *topleft = (*topleft) | 0xf000;
+		    udelay(transmitter[number].dash_time *1000);
+		    *topleft = (*topleft) & 0x0fff;
+		    udelay(transmitter[number].dot_time *1000);
+ 	        } else {
+		    //printk(" ");
+		    udelay(transmitter[number].pause_time *500);
+		    udelay(transmitter[number].pause_time *500);
+	        }
+ 	 //   }
+	}
+
     }
 
-    // Zmiana background koloru lewego gornego na bialy        
-    //*topleft = (*topleft) | 0xf000;
-    // Zmiana background koloru lewego gornego na czarny
-    //*topleft = (*topleft) & 0x0fff; 
-
+ //   *topleft = (*topleft) | 0xf000;
+ //   *topleft = (*topleft) & 0x0fff;
     return count;
 }
 
@@ -194,7 +203,7 @@ struct file_operations morse_ops = {
         ioctl: morse_ioctl
 };
 
-#define MORSE_MAJOR 60
+#define MORSE_MAJOR 61
 
 int morse_init(void) {
     int i;
