@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define CHANGE_PAUSE_TIME _IOW(60,4,int)
+#define CHANGE_PAUSE_TIME _IOW(61,4,int)
 
 int main() {
 	int fd = open("/dev/morse");

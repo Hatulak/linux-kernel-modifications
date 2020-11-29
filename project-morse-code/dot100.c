@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define CHANGE_DOT_TIME _IOW(60,2,int)
+#define CHANGE_DOT_TIME _IOW(61,2,int)
 
 int main() {
 	int fd = open("/dev/morse");

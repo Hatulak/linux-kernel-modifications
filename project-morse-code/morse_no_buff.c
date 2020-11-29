@@ -19,10 +19,10 @@
 #define DASH_START_TIME 500
 #define PAUSE_START_TIME 1000
 
-#define CHANGE_BUFF _IOW(60,1,int)
-#define CHANGE_DOT_TIME _IOW(60,2,int)
-#define CHANGE_DASH_TIME _IOW(60,3,int)
-#define CHANGE_PAUSE_TIME _IOW(60,4,int)
+#define CHANGE_BUFF _IOW(61,1,int)
+#define CHANGE_DOT_TIME _IOW(61,2,int)
+#define CHANGE_DASH_TIME _IOW(61,3,int)
+#define CHANGE_PAUSE_TIME _IOW(61,4,int)
 
 static const char *morse_chars[] = {
     ".-",   //A

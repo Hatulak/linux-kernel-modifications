@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define CHANGE_DASH_TIME _IOW(60,3,int)
+#define CHANGE_DASH_TIME _IOW(61,3,int)
 
 int main() {
 	int fd = open("/dev/morse");
