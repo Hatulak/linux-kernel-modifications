@@ -129,36 +129,37 @@ int morse_write(struct inode *inode, struct file *file, const char *pB, int coun
                 return i;
         }
         tmp = get_user(pB + i);
-	print_string = getMorseCode(tmp);
+	    print_string = getMorseCode(tmp);
        
         for(j = 0; j < strlen(print_string); j++){
-	//    if(*transmitter[number].cons_nr == currcons){
-         	if(print_string[j] == '.'){
-	            //printk(".");
+            if(print_string[j] == '.'){
+		        *topleft = (*topleft) | 0xf000;
+                current->state=TASK_INTERRUPTIBLE;
+                current->timeout=jiffies+transmitter[number].dot_time*HZ/1000;
+                schedule();
 
-		    *topleft = (*topleft) | 0xf000;
-		    udelay(transmitter[number].dot_time *1000);
 	            *topleft = (*topleft) & 0x0fff;
-		    udelay(transmitter[number].dot_time *1000);
-    	        } else if (print_string[j] == '-'){
-		    //printk("-");
+		        current->state=TASK_INTERRUPTIBLE;
+                current->timeout=jiffies+transmitter[number].dot_time*HZ/1000;
+                schedule();
+           	} else if (print_string[j] == '-'){
+	    	    *topleft = (*topleft) | 0xf000;
+	    	    current->state=TASK_INTERRUPTIBLE;
+                current->timeout=jiffies+transmitter[number].dash_time*HZ/1000;
+                schedule();
 
-		    *topleft = (*topleft) | 0xf000;
-		    udelay(transmitter[number].dash_time *1000);
-		    *topleft = (*topleft) & 0x0fff;
-		    udelay(transmitter[number].dot_time *1000);
+	    	    *topleft = (*topleft) & 0x0fff;
+	    	    current->state=TASK_INTERRUPTIBLE;
+                current->timeout=jiffies+transmitter[number].dot_time*HZ/1000;
+                schedule();
  	        } else {
-		    //printk(" ");
-		    udelay(transmitter[number].pause_time *500);
-		    udelay(transmitter[number].pause_time *500);
+		        current->state=TASK_INTERRUPTIBLE;
+                current->timeout=jiffies+transmitter[number].pause_time*HZ/1000;
+                schedule();
 	        }
- 	 //   }
-	}
-
+	    }
     }
 
- //   *topleft = (*topleft) | 0xf000;
- //   *topleft = (*topleft) & 0x0fff;
     return count;
 }
 
