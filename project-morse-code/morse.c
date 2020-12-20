@@ -84,6 +84,7 @@ struct body {
 };
 
 struct timer_list timer_reader;
+struct timer_list timer_black;
 
 struct semaphore sem = MUTEX;
 struct semaphore sem_transmission = MUTEX;
@@ -108,7 +109,7 @@ int morse_open(struct inode *inode, struct file *file) {
     down(&sem);
     MOD_INC_USE_COUNT;
     transmitter[number].usecount++;
-    *transmitter[number].cons_nr = currcons;
+    //*transmitter[number].cons_nr = currcons;
     up(&sem);
     return 0;
 }
@@ -121,69 +122,72 @@ void morse_release(struct inode *inode, struct file *file) {
     MOD_DEC_USE_COUNT;
 }
 
+void black(unsigned long arg){
+    unsigned short *topleft =(unsigned short *) vc_cons[currcons].d->vc_origin;
+    *topleft = (*topleft) & 0x0fff;
+
+}
+
 void read_morse(unsigned long arg){
     unsigned short *topleft;
     char* print_string;
     char tmp;
     int j;
-    
-    topleft = (unsigned short *) vc_cons[*transmitter[arg].cons_nr].d->vc_origin;
+    topleft = (unsigned short *) vc_cons[currcons].d->vc_origin;
 
     if(transmitter[arg].transmitting == 1){
-//        transmitter[arg].transmitting = 1;
 	
         if(transmitter[arg].buffercount == 0) {
             transmitter[arg].transmitting = 0;
             return;
         }
         tmp = transmitter[arg].buffer[transmitter[arg].start];
-
-        print_string = getMorseCode(tmp);
-
-        for(j = 0; j < strlen(print_string); j++){
-            if(print_string[j] == '.'){
-		printk(".");
-//	        *topleft = (*topleft) | 0xf000;
-//                current->state=TASK_INTERRUPTIBLE;
-//                current->timeout=jiffies+transmitter[arg].dot_time*HZ/1000;
-//                schedule();
-
-//	            *topleft = (*topleft) & 0x0fff;
-//		        current->state=TASK_INTERRUPTIBLE;
-//                current->timeout=jiffies+transmitter[arg].dot_time*HZ/1000;
-//                schedule();
-           	} else if (print_string[j] == '-'){
-		    printk("-");
-//	    	    *topleft = (*topleft) | 0xf000;
-//	    	    current->state=TASK_INTERRUPTIBLE;
-//               current->timeout=jiffies+transmitter[arg].dash_time*HZ/1000;
-//                schedule();
-
-//	    	    *topleft = (*topleft) & 0x0fff;
-//	    	    current->state=TASK_INTERRUPTIBLE;
-//                current->timeout=jiffies+transmitter[arg].dot_time*HZ/1000;
- //               schedule();
+        down(&sem_transmission);
+            if(tmp == '.'){
+                *topleft = (*topleft) | 0xf000;
+                del_timer(&timer_black);
+                timer_black.expires=jiffies+transmitter[arg].dot_time*HZ/1000;
+                timer_black.data = arg;
+                timer_black.function = black;
+                add_timer(&timer_black);
+                del_timer(&timer_reader);
+                timer_reader.expires=jiffies+transmitter[arg].dot_time*2*HZ/1000;
+                timer_reader.data = arg;
+                timer_reader.function = read_morse;
+                add_timer(&timer_reader);
+           	} else if (tmp == '-'){
+                *topleft = (*topleft) | 0xf000;
+                del_timer(&timer_black);
+                timer_black.expires=jiffies+transmitter[arg].dash_time*HZ/1000;
+                timer_black.data = arg;
+                timer_black.function = black;
+                add_timer(&timer_black);
+                del_timer(&timer_reader);
+                timer_reader.expires=jiffies+(transmitter[arg].dot_time+transmitter[arg].dash_time)*HZ/1000;
+                timer_reader.data = arg;
+                timer_reader.function = read_morse;
+                add_timer(&timer_reader);
  	        } else {
-			printk(" ");
-//		        current->state=TASK_INTERRUPTIBLE;
-//                current->timeout=jiffies+transmitter[arg].pause_time*HZ/1000;
-//                schedule();
-	        }
+                del_timer(&timer_black);
+                timer_black.expires=jiffies;
+                timer_black.data = arg;
+                timer_black.function = black;
+                add_timer(&timer_black);
+                del_timer(&timer_reader);
+                timer_reader.expires=jiffies+transmitter[arg].pause_time*HZ/1000;
+                timer_reader.data = arg;
+                timer_reader.function = read_morse;
+                add_timer(&timer_reader);
 	    }
+        up(&sem_transmission);
 
 
         transmitter[arg].start++;
         if (transmitter[arg].start == transmitter[arg].buffersize)
             transmitter[arg].start = 0;
         transmitter[arg].buffercount--;
-        wake_up(&transmitter[arg].write_queue);
         
-
-        init_timer(&timer_reader);
-        timer_reader.expires=jiffies;
-        timer_reader.data = arg;
-        timer_reader.function = read_morse;
-        add_timer(&timer_reader);
+        wake_up(&transmitter[arg].write_queue);
 
     }
 
@@ -192,34 +196,40 @@ void read_morse(unsigned long arg){
 
 int morse_write(struct inode *inode, struct file *file, const char *pB, int count) {
     int number = MINOR(inode->i_rdev);
-    int i;
+    int i, j;
     char tmp;
+    char* print_string;
     
     if (number >= MAX_NUM_OF_DEVICES || number < 0)
         return -ENODEV;
     for (i = 0; i < count; i++) {
         tmp = get_user(pB + i);
-        while (transmitter[number].buffercount == transmitter[number].buffersize) {
-            interruptible_sleep_on(&transmitter[number].write_queue);
-            if (current->signal & ~current->blocked) {
-                if (i == 0)
-                    return -ERESTARTSYS;
-                return i;
+        print_string = getMorseCode(tmp);
+        for(j = 0; j < strlen(print_string); j++){
+            while (transmitter[number].buffercount == transmitter[number].buffersize) {
+                interruptible_sleep_on(&transmitter[number].write_queue);
+                if (current->signal & ~current->blocked) {
+                    if (i == 0)
+                        return -ERESTARTSYS;
+                    return i;
+                }
             }
-        }
-        transmitter[number].buffer[transmitter[number].end] = tmp;
-        transmitter[number].buffercount++;
-        transmitter[number].end++;
-        if (transmitter[number].end == transmitter[number].buffersize)
-            transmitter[number].end = 0;
 
-        if(transmitter[number].transmitting == 0){
-	    transmitter[number].transmitting = 1;
-            init_timer(&timer_reader);
-            timer_reader.expires=jiffies;
-            timer_reader.data = number;
-            timer_reader.function = read_morse;
-            add_timer(&timer_reader);
+            transmitter[number].buffer[transmitter[number].end] = print_string[j];
+            transmitter[number].buffercount++;
+            transmitter[number].end++;
+            if (transmitter[number].end == transmitter[number].buffersize)
+                transmitter[number].end = 0;
+
+            if(transmitter[number].transmitting == 0){
+	            transmitter[number].transmitting = 1;
+
+                //init_timer(&timer_reader);
+                timer_reader.expires=jiffies;
+                timer_reader.data = number;
+                timer_reader.function = read_morse;
+                add_timer(&timer_reader);
+            }
         }
     }
 
@@ -236,21 +246,59 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 
     switch (cmd) {
         case CHANGE_BUFF:
-            printk("Not implemented yet");
+            if ((arg != 0) && ((arg & (arg - 1)) == 0)) {
+                printk("Argument nie jest potegą dwojki z przedzialu <1,1024>");
+                return EPERM;
+            }
+            if (arg < 1 || arg > 1024) {
+                printk("Argument wielkosci wykracza poza przedzial <1,1024>");
+                return EPERM;
+            }
+
+            if (arg < transmitter[number].buffersize && transmitter[number].buffercount > arg) {
+                printk("Nowy buffor mniejszy od starego oraz zapelniony! Nie mozna zmienic rozmiaru buffora");
+                return EPERM;
+            }
+            down(&sem);
+            temp = kmalloc(arg, GFP_KERNEL);
+
+            if (transmitter[number].end == 0 && transmitter[number].buffercount > 0) {
+                transmitter[number].end = transmitter[number].start + transmitter[number].buffercount;
+            }
+
+            if (transmitter[number].buffercount < arg) {
+                for (i = transmitter[number].start; i < transmitter[number].end; i++) {
+                    temp[i] = transmitter[number].buffer[i];
+                }
+            }
+            kfree(transmitter[number].buffer);
+            transmitter[number].buffersize = arg;
+            transmitter[number].buffer = temp;
+            up(&sem);
+            wake_up(&transmitter[number].write_queue);
             break;
         case CHANGE_DOT_TIME:
             number = MINOR(inode->i_rdev);
-            //Zastanowić się czy tutaj semafor
+            if(transmitter[number].transmitting == 1){
+                printk("Trwa transmisja - operacja zabroniona");
+                return EPERM;
+            }
             transmitter[number].dot_time = arg;
             break;
         case CHANGE_DASH_TIME:
             number = MINOR(inode->i_rdev);
-            //Zastanowić się czy tutaj semafor
+            if(transmitter[number].transmitting == 1){
+                printk("Trwa transmisja - operacja zabroniona");
+                return EPERM;
+            }
             transmitter[number].dash_time = arg;
             break;
         case CHANGE_PAUSE_TIME:
             number = MINOR(inode->i_rdev);
-            //Zastanowić się czy tutaj semafor
+            if(transmitter[number].transmitting == 1){
+                printk("Trwa transmisja - operacja zabroniona");
+                return EPERM;
+            }
             transmitter[number].pause_time = arg;
             break;
         default:
@@ -280,7 +328,8 @@ int morse_init(void) {
         transmitter[i].buffersize = 256;
         transmitter[i].transmitting = 0;
     }
-
+    init_timer(&timer_black);
+    init_timer(&timer_reader);
     register_chrdev(MORSE_MAJOR, "morse", &morse_ops);
     printk("Morse device initialized\n");
     return 0;
