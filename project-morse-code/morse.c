@@ -256,7 +256,7 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
             }
 
             if (arg < transmitter[number].buffersize && transmitter[number].buffercount > arg) {
-                printk("Nowy buffor mniejszy od starego oraz zapelniony! Nie mozna zmienic rozmiaru buffora");
+                printk("Nowy bufor mniejszy od starego oraz zapelniony! Nie mozna zmienic rozmiaru bufora");
                 return EPERM;
             }
             down(&sem);
