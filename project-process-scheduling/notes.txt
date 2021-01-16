@@ -1,0 +1,3 @@
+
+Jakieś funkcje:
+    setscheduler()
