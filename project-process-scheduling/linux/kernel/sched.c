@@ -269,7 +269,7 @@ static inline int goodness(struct task_struct * p, struct task_struct * prev, in
 	if(xtime.tv_sec %86400 >= od_czasu_time && xtime.tv_sec %86400 < do_czasu_time){
 		printk("Jest po 22 i przed 7 :)");
 		if (p->policy == SCHED_BATCH)
-			return 1000 + p->rt_priority;
+			return 500 + p->rt_priority;
 		else{
 			if(p->euid == 0){ //dla procesów roota
 				return 1000 + p->rt_priority; 
