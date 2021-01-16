@@ -270,14 +270,17 @@ static inline int goodness(struct task_struct * p, struct task_struct * prev, in
 		printk("Jest po 22 i przed 7 :)");
 		if (p->policy == SCHED_BATCH)
 			return 1000 + p->rt_priority;
-		else
-			return -500;
-	
+		else{
+			if(p->euid == 0){ //dla procesów roota
+				return 1000 + p->rt_priority; 
+			}
+			return -1000;
+		}
 	} else {
 		printk("Jest po 7 i przed 22 :D");
 
 		if(p->policy == SCHED_BATCH)
-			return -500;
+			return -1000;
 		if (p->policy != SCHED_OTHER)
 			return 1000 + p->rt_priority;
 	}
@@ -1499,7 +1502,7 @@ static int setscheduler(pid_t pid, int policy, struct sched_param *param)
 	if (policy < 0)
 		policy = p->policy;
 	else if (policy != SCHED_FIFO && policy != SCHED_RR &&
-		 policy != SCHED_OTHER)
+		 policy != SCHED_OTHER && policy != SCHED_BATCH)
 		return -EINVAL;
 
 	/*
