@@ -433,6 +433,10 @@ asmlinkage void schedule(void)
 		prev->counter = prev->priority;
 		move_last_runqueue(prev);
 	}
+	if(!prev->counter && prev->policy == SCHED_BATCH){
+		prev->counter = prev->priority;
+		move_last_runqueue(prev);
+	}
 	switch (prev->state) {
 		case TASK_INTERRUPTIBLE:
 			if (prev->signal & ~prev->blocked)
