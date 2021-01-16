@@ -107,6 +107,9 @@ struct task_struct * task[NR_TASKS] = {&init_task, };
 
 struct kernel_stat kstat = { 0 };
 
+int od_czasu_time = 79200;
+int do_czasu_time = 25200;
+
 static inline void add_to_runqueue(struct task_struct * p)
 {
 #ifdef __SMP__
@@ -252,13 +255,32 @@ static inline int goodness(struct task_struct * p, struct task_struct * prev, in
 #endif
 #endif
 
+	//ZMIENIAMY - JAK GODZINA 22 do 7
+	//jak p->policy == SCHED_BATCH to zwróć bardzo dużą wartość :) a dla innych zwróć -1 lub 0 - sprawdzić
+	//jak godzina od 7 do 22 to gdy p->policy == SCHED_BATCH to zwróć -1 lub 0 - sprawdzić
+
+	
 	/*
 	 * Realtime process, select the first one on the
 	 * runqueue (taking priorities within processes
 	 * into account).
 	 */
-	if (p->policy != SCHED_OTHER)
-		return 1000 + p->rt_priority;
+
+	if(xtime.tv_sec %86400 >= od_czasu_time && xtime.tv_sec %86400 < do_czasu_time){
+		printk("Jest po 22 i przed 7 :)");
+		if (p->policy == SCHED_BATCH)
+			return 1000 + p->rt_priority;
+		else
+			return -500;
+	
+	} else {
+		printk("Jest po 7 i przed 22 :D");
+
+		if(p->policy == SCHED_BATCH)
+			return -500;
+		if (p->policy != SCHED_OTHER)
+			return 1000 + p->rt_priority;
+	}
 
 	/*
 	 * Give the process a first-approximation goodness value
@@ -449,6 +471,12 @@ asmlinkage void schedule(void)
 	c = -1000;
 	next = idle_task;
 	while (p != &init_task) {
+
+		//IF - sprawdzamy która godzina:
+		//jak od 22 do 7 to znajdź taska gdzie policy = SCHED_BATCH
+		
+
+		// od 7 do 22 po staremu
 		int weight = goodness(p, prev, this_cpu);
 		if (weight > c)
 			c = weight, next = p;
@@ -1474,6 +1502,7 @@ static int setscheduler(pid_t pid, int policy, struct sched_param *param)
 	 * Valid priorities for SCHED_FIFO and SCHED_RR are 1..99, valid
 	 * priority for SCHED_OTHER is 0.
 	 */
+	//TUTAJ WALIDACJA 
 	if (lp.sched_priority < 0 || lp.sched_priority > 99)
 		return -EINVAL;
 	if ((policy == SCHED_OTHER) != (lp.sched_priority == 0))
@@ -1492,6 +1521,13 @@ static int setscheduler(pid_t pid, int policy, struct sched_param *param)
 		move_last_runqueue(p);
 	sti();
 	need_resched = 1;
+	return 0;
+}
+
+asmlinkage int sys_change_time(int od_czasu, int do_czasu){
+	printk("Zmieniam czas");
+	od_czasu_time = od_czasu;
+	do_czasu_time = do_czasu;
 	return 0;
 }
 
@@ -1561,6 +1597,8 @@ asmlinkage int sys_sched_get_priority_max(int policy)
 		return 99;
 	      case SCHED_OTHER:
 		return 0;
+		  case SCHED_BATCH:
+		return 0;
 	}
 
 	return -EINVAL;
@@ -1573,6 +1611,8 @@ asmlinkage int sys_sched_get_priority_min(int policy)
 	      case SCHED_RR:
 		return 1;
 	      case SCHED_OTHER:
+		return 0;
+		  case SCHED_BATCH:
 		return 0;
 	}
 

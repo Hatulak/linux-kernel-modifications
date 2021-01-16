@@ -172,6 +172,7 @@
 #define __NR_poll		168
 #define __NR_getpmsg		188
 #define __NR_putpmsg		189
+#define __NR_change_time	190
 
 /* XXX - _foo needs to be __foo, while __NR_bar could be _NR_bar. */
 #define _syscall0(type,name) \
@@ -287,6 +288,7 @@ static inline _syscall3(int,open,const char *,file,int,flag,int,mode)
 static inline _syscall1(int,close,int,fd)
 static inline _syscall1(int,_exit,int,exitcode)
 static inline _syscall3(pid_t,waitpid,pid_t,pid,int *,wait_stat,int,options)
+static inline _syscall2(int, change_time,int, od_czasu, int, do_czasu)
 
 static inline pid_t wait(int * wait_stat)
 {

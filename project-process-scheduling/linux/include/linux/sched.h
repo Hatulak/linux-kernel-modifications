@@ -93,6 +93,7 @@ extern int last_pid;
 #define SCHED_OTHER		0
 #define SCHED_FIFO		1
 #define SCHED_RR		2
+#define SCHED_BATCH     3
 
 struct sched_param {
 	int sched_priority;

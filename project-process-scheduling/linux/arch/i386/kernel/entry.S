@@ -714,4 +714,5 @@ ENTRY(sys_call_table)
 	.long 0,0,0,0,0,0,0,0			/* 180 - 187 */
 	.long 0					/* 188 STREAMS getpmsg */
 	.long 0					/* 189 STREAMS putpmsg */
-	.space (NR_syscalls-189)*4
+	.long SYMBOL_NAME(sys_change_time)
+	.space (NR_syscalls-190)*4
